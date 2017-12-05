@@ -1057,16 +1057,6 @@ select
 ;
 
 
-drop table if exists test_temp_input;
-create temp table test_temp_input as
-select
-'0
-3
-0
-1
--3'::text as inputs
-;
-
 -- with skips as(
 drop table if exists skips;
 create temp table skips as(
@@ -1082,13 +1072,6 @@ from temp_input
 )
 ;
 
-select * 
-from skips
-;
-
-select array_agg(0::bigint)
-from skips
-;
 
 
 --part 1
@@ -1124,6 +1107,7 @@ limit 1
 
 
 
+
 --part ii
 
 
@@ -1148,9 +1132,89 @@ select y.rn + y.hits[y.rn], y.hits[y.rn]
 	,num as num
 from skippy y
 where counter < 1000000
+	and y.rn + y.hits[y.rn] between 1 and num
 )
 select * from skippy
 -- where counter <> 0
 order by counter desc
 limit 1
 ;
+
+
+
+
+
+
+/*
+
+--I only had enough hard disk space to run more than 5million at a time so stepping stones:
+
+
+create temp table stepping_stone as
+with recursive skippy as(
+select rn, skips
+	, (select array_agg(skips::bigint)
+		from skips) as hits
+	, 1::int as counter
+-- 	, skips as true_skips
+	, num
+from skips
+where rn = 1
+union all
+select y.rn + y.hits[y.rn], y.hits[y.rn]
+	, case when y.rn = 1
+		then array_prepend(case when y.hits[1] <3 then y.hits[1]+1 else y.hits[1]-1 end,y.hits[2:y.num])
+		when y.rn = num 
+		then array_append(y.hits[1:y.num-1], case when y.hits[num] <3 then y.hits[num]+1 else y.hits[num]-1 end)
+		else array_cat(array_append(y.hits[1:y.rn-1], case when y.hits[y.rn] <3 then y.hits[y.rn]+1 else y.hits[y.rn]-1 end), y.hits[y.rn+1:y.num])
+		end as hits
+	, y.counter+1 as counter
+-- 	, y.hits[y.rn] as true_skips
+	,num as num
+from skippy y
+where counter < 5000000
+)
+select * from skippy
+-- where counter <> 0
+order by counter desc
+limit 1
+;
+
+
+drop table if exists stepping_stone_2;
+create temp table stepping_stone_2 as
+select *
+from stepping_stone;
+
+select *
+from stepping_stone_2;
+
+
+
+drop table if exists stepping_stone;
+create temp table stepping_stone as
+with recursive skippy as(
+select *
+from stepping_stone_2
+union all
+select y.rn + y.hits[y.rn], y.hits[y.rn]
+	, case when y.rn = 1
+		then array_prepend(case when y.hits[1] <3 then y.hits[1]+1 else y.hits[1]-1 end,y.hits[2:y.num])
+		when y.rn = num 
+		then array_append(y.hits[1:y.num-1], case when y.hits[num] <3 then y.hits[num]+1 else y.hits[num]-1 end)
+		else array_cat(array_append(y.hits[1:y.rn-1], case when y.hits[y.rn] <3 then y.hits[y.rn]+1 else y.hits[y.rn]-1 end), y.hits[y.rn+1:y.num])
+		end as hits
+	, y.counter+1 as counter
+-- 	, y.hits[y.rn] as true_skips
+	,num as num
+from skippy y
+where counter < 28000000
+	and y.rn + y.hits[y.rn] between 1 and num
+)
+select * from skippy
+-- where counter <> 0
+order by counter desc
+limit 1
+;
+
+*/
